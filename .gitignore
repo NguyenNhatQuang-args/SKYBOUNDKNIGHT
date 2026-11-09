@@ -1,0 +1,33 @@
+﻿# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Coverage / cache
+coverage/
+.cache/
+.eslintcache

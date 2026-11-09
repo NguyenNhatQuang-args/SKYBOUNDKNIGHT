@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Skybound Knight - Pixel Climb</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      html,
+      body {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 45%, #161822 0%, #090a0f 100%);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        touch-action: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Khung vỏ hiển thị theo chế độ tỉ lệ màn hình */
+      #viewport-shell {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 50%, #141722 0%, #08090e 100%);
+        transition: width 0.18s ease, height 0.18s ease;
+      }
+
+      body.layout-desktop-16-9 #viewport-shell,
+      body.layout-mobile-portrait #viewport-shell,
+      body.layout-mobile-landscape #viewport-shell {
+        border: 2px solid #8a6d3b;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.92), inset 0 0 0 2px #262018;
+      }
+
+      body.layout-mobile-portrait #viewport-shell {
+        justify-content: flex-start;
+        padding-top: 48px;
+      }
+
+      /* Khung chứa Canvas 4:3 chuẩn Pixel Art (512x384 nhân hệ số chuẩn, KHÔNG bao giờ phình to/méo) */
+      #game-container {
+        position: relative;
+        overflow: hidden;
+        background-color: #0d0f18;
+        border: 2px solid #4a3f2d;
+        box-shadow: 0 12px 42px rgba(0, 0, 0, 0.88), inset 0 0 0 1px #1c1813;
+        flex-shrink: 0;
+      }
+
+      body.layout-full-stretch #game-container {
+        border: none;
+      }
+
+      canvas {
+        display: block;
+        margin: 0 !important;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-crisp-edges;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        -ms-interpolation-mode: nearest-neighbor;
+      }
+
+      /* Nhãn hiển thị độ phân giải / tỉ lệ góc dưới khung máy */
+      #viewport-bezel-info {
+        position: absolute;
+        bottom: 4px;
+        right: 10px;
+        font-size: 10px;
+        font-family: 'Courier New', Courier, monospace;
+        color: rgba(180, 164, 136, 0.5);
+        letter-spacing: 0.5px;
+        pointer-events: none;
+        z-index: 15;
+      }
+
+      /* Thanh HUD Kiến Trúc Đá Khắc Đồng (Không dùng icon AI/Emoji) */
+      #hud-overlay {
+        position: absolute;
+        top: 8px;
+        left: 10px;
+        right: 10px;
+        z-index: 20;
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        pointer-events: none;
+      }
+
+      #hud-overlay.visible {
+        display: flex;
+      }
+
+      .hud-pill {
+        background: #14161f;
+        border: 2px solid #785f37;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8), inset 0 0 0 1px #2b2419;
+        padding: 5px 11px;
+        color: #e6dfd3;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        max-width: 100%;
+      }
+
+      body.is-portrait-screen .hud-pill {
+        font-size: 11px;
+        padding: 4px 8px;
+        gap: 5px;
+      }
+
+      body.is-portrait-screen .hud-pill kbd {
+        display: none;
+      }
+
+      .hud-progress-wrap {
+        width: 58px;
+        height: 7px;
+        background: #0b0c12;
+        border: 1px solid #8a6d3b;
+        overflow: hidden;
+        display: inline-flex;
+        vertical-align: middle;
+      }
+
+      .hud-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #b4833e, #e8c170);
+        transition: width 0.15s ease-out;
+      }
+
+      .hud-pill span.highlight {
+        color: #e8c170;
+        font-weight: 700;
+      }
+
+      .hud-pill span.cyan {
+        color: #9ab8d4;
+        font-weight: 700;
+      }
+
+      .hud-pill kbd {
+        background: #1e212d;
+        border: 1px solid #63533b;
+        padding: 1px 5px;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 11px;
+        color: #d4b475;
+      }
+
+      .hud-btn {
+        pointer-events: auto;
+        cursor: pointer;
+        background: #1e212d;
+        border: 1px solid #8a6d3b;
+        color: #e6dfd3;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        transition: background 0.12s, border-color 0.12s, color 0.12s;
+      }
+
+      .hud-btn:hover {
+        background: #2d3142;
+        border-color: #e8c170;
+        color: #fff;
+      }
+
+      /* Dòng chữ hiển thị Màn số mấy ở góc trái phía dưới màn hình (không đóng khung HUD) */
+      #stage-bottom-left-hud {
+        position: absolute;
+        bottom: 10px;
+        left: 14px;
+        z-index: 22;
+        display: none;
+        color: #e8c170;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        text-shadow:
+          0 2px 4px rgba(0, 0, 0, 0.95),
+          0 0 3px #000000;
+        pointer-events: none;
+        transition: color 0.2s ease, transform 0.2s ease;
+      }
+
+      #stage-bottom-left-hud.visible {
+        display: block;
+      }
+
+      body.is-portrait-screen #stage-bottom-left-hud {
+        bottom: 84px;
+      }
+
+      #stage-bottom-left-hud.world-link-flash {
+        color: #ffffff;
+        transform: scale(1.08);
+      }
+
+      /* Lớp Giao Diện Kiến Trúc Thành Cổ (Citadel Stone & Brass Frame) */
+      #ui-layer {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(8, 9, 14, 0.58);
+        padding: 14px;
+      }
+
+      #ui-layer.visible {
+        display: flex;
+      }
+
+      /* Bố cục Sảnh Pháo Đài: Để lộ Đài Tưởng Niệm Hiệp Sĩ bên trái trên màn hình rộng */
+      #ui-layer.citadel-dock {
+        justify-content: flex-end;
+        background: linear-gradient(90deg, rgba(8, 9, 14, 0.08) 0%, rgba(8, 9, 14, 0.45) 42%, rgba(8, 9, 14, 0.82) 100%);
+        padding-right: max(20px, 5vw);
+      }
+
+      @media (max-width: 760px) {
+        #ui-layer.citadel-dock {
+          justify-content: center;
+          padding-right: 14px;
+        }
+      }
+
+      .ui-card {
+        width: 100%;
+        max-width: 580px;
+        background: linear-gradient(180deg, #171922 0%, #10121a 100%);
+        border: 2px solid #9c7a44;
+        box-shadow:
+          0 24px 64px rgba(0, 0, 0, 0.95),
+          inset 0 0 0 2px #0b0c12,
+          inset 0 0 0 3px #473924;
+        padding: 20px 22px;
+        color: #e6dfd3;
+        max-height: 92vh;
+        overflow-y: auto;
+        position: relative;
+      }
+
+      .ui-card.citadel-panel {
+        max-width: 490px;
+      }
+
+      /* Khung khắc đá cổ đầu bảng */
+      .citadel-crest-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 4px;
+        color: #9c7a44;
+        font-size: 11px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .citadel-crest-line {
+        height: 1px;
+        flex: 1;
+        background: linear-gradient(90deg, transparent, #8a6d3b, transparent);
+      }
+
+      .hero-banner {
+        background: #12141c;
+        border: 1px solid #52432b;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: stretch;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .stat-chip {
+        background: #181b26;
+        border: 1px solid #3d3324;
+        padding: 6px 8px;
+        text-align: center;
+        flex: 1;
+        min-width: 105px;
+      }
+
+      .stat-chip .val {
+        font-size: 15px;
+        font-weight: 800;
+        font-family: Georgia, 'Times New Roman', serif;
+        color: #e8c170;
+        letter-spacing: 0.5px;
+      }
+
+      .stat-chip .lbl {
+        font-size: 10.5px;
+        color: #9e9689;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        margin-top: 2px;
+      }
+
+      .ui-title {
+        font-size: 23px;
+        font-weight: 800;
+        font-family: Georgia, 'Times New Roman', serif;
+        text-align: center;
+        color: #e8c170;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+      }
+
+      .ui-subtitle {
+        font-size: 12.5px;
+        text-align: center;
+        color: #a8a093;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #2e2922;
+      }
+
+      .ui-btn-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .ui-btn {
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #e6dfd3;
+        background: linear-gradient(180deg, #212430 0%, #171922 100%);
+        border: 1px solid #574830;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        cursor: pointer;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        transition: border-color 0.12s, background 0.12s, color 0.12s;
+      }
+
+      .ui-btn:hover {
+        border-color: #d4a959;
+        background: linear-gradient(180deg, #2b2f3f 0%, #1e212d 100%);
+        color: #ffffff;
+      }
+
+      .ui-btn.primary {
+        background: linear-gradient(180deg, #5e4321 0%, #3d2b14 100%);
+        border-color: #d4a959;
+        color: #f7ebd4;
+      }
+
+      .ui-btn.primary:hover {
+        background: linear-gradient(180deg, #755429 0%, #4f381a 100%);
+        border-color: #f3cf82;
+      }
+
+      .ui-btn.locked {
+        opacity: 0.62;
+        border-color: #363842;
+        background: #14161f;
+      }
+
+      .ui-btn .badge {
+        font-size: 11px;
+        font-family: 'Courier New', Courier, monospace;
+        padding: 2px 7px;
+        background: #101219;
+        border: 1px solid #4a3f2d;
+        color: #d4b475;
+        white-space: nowrap;
+      }
+
+      .ui-section {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #2e2922;
+      }
+
+      .ui-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 7px 0;
+        font-size: 13px;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .ui-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+        font-size: 12.5px;
+      }
+
+      .ui-table th,
+      .ui-table td {
+        padding: 6px 8px;
+        border-bottom: 1px solid #252836;
+        text-align: left;
+      }
+
+      .ui-table th {
+        color: #d4b475;
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.5px;
+      }
+
+      /* Lưới chọn Nhân Vật / Vũ Khí / Khiên trong Kho Vũ Khí (Armory) */
+      .armory-subtabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+
+      .armory-tab-btn {
+        flex: 1;
+        padding: 7px 8px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: #161821;
+        border: 1px solid #4a3f2d;
+        color: #a8a093;
+        cursor: pointer;
+      }
+
+      .armory-tab-btn.active {
+        background: #423018;
+        border-color: #e8c170;
+        color: #f7ebd4;
+      }
+
+      .loadout-summary-box {
+        background: #12141c;
+        border: 1px solid #635032;
+        padding: 9px 12px;
+        margin-bottom: 12px;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      /* Nút cảm ứng ảo trên điện thoại / khung Handheld */
+      #touch-controls {
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
+        z-index: 25;
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        pointer-events: none;
+      }
+
+      #touch-controls.visible {
+        display: flex;
+      }
+
+      .touch-group {
+        display: flex;
+        gap: 12px;
+        pointer-events: auto;
+      }
+
+      .touch-btn {
+        width: 64px;
+        height: 64px;
+        background: rgba(18, 20, 28, 0.88);
+        border: 2px solid #9c7a44;
+        color: #e8c170;
+        font-size: 18px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75);
+        touch-action: none;
+        cursor: pointer;
+      }
+
+      .touch-btn.jump-btn {
+        width: 98px;
+        background: rgba(74, 52, 24, 0.9);
+        border-color: #e8c170;
+        color: #f7ebd4;
+        font-size: 13px;
+        letter-spacing: 0.5px;
+      }
+
+      .touch-btn.active {
+        background: rgba(156, 122, 68, 0.65);
+        transform: scale(0.95);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="viewport-shell">
+      <!-- Thanh HUD sắc nét trong lúc chơi -->
+      <div id="hud-overlay">
+        <div class="hud-pill" id="hud-left"></div>
+        <div class="hud-pill" id="hud-right"></div>
+      </div>
+
+      <!-- Khung Canvas chuẩn 4:3 Pixel-Perfect -->
+      <div id="game-container"></div>
+
+      <!-- Bảng tự động hiện Màn số mấy, Âm nhạc & Hạt giống (Seed) ở góc trái phía dưới màn hình -->
+      <div id="stage-bottom-left-hud"></div>
+
+      <!-- Touch controls for Mobile / Mobile Frame modes -->
+      <div id="touch-controls">
+        <div class="touch-group">
+          <button class="touch-btn" id="btn-touch-left" type="button" aria-label="Left">LEFT</button>
+          <button class="touch-btn" id="btn-touch-right" type="button" aria-label="Right">RIGHT</button>
+        </div>
+        <div class="touch-group">
+          <button class="touch-btn jump-btn" id="btn-touch-jump" type="button" aria-label="Hold Jump">
+            HOLD JUMP
+          </button>
+        </div>
+      </div>
+
+      <div id="viewport-bezel-info"></div>
+    </div>
+
+    <!-- Lớp giao diện Menu / Pause / Win -->
+    <div id="ui-layer"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
